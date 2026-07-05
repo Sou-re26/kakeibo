@@ -4,6 +4,20 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 @AGENTS.md
 
+## 言語設定
+ - 常に日本語で会話する
+ - コメントも日本語で記述する
+ - エラーメッセージの説明も日本語で行う
+ - ドキュメントも日本語で生成する
+
+## 開発ルール
+ - 実装前に、簡潔な計画を立てる。
+ - 実装後に、セルフレビューを行う。
+ - 無​​関係なファイルは変更しない。
+ - 再利用可能なコンポーネントを優先する。
+ - アーキテクチャの変更を行う場合は、その理由を説明する。
+ - 実装や大きな変更の際は、現在のプロジェクトに合わせてCLAUDE.mdを更新する
+
 ## プロジェクト概要
 
 Expo (React Native) 製の家計簿アプリ。expo-router によるファイルベースルーティング、DBは expo-sqlite + Drizzle ORM。
