@@ -17,7 +17,8 @@ npm run android          # Android実機/エミュレータで起動
 npm run ios              # iOSシミュレータで起動
 npm run web              # Webで起動
 npm run lint             # ESLint (expo lint) 実行
-npx tsc --noEmit         # 型チェック(npmスクリプト未定義)
+npm run typecheck        # 型チェック (tsc --noEmit)
+npm run check            # lint+型チェック一括(コミット前に実行)
 ```
 
 - テストは未導入(テストランナー・テストファイルなし)。ロジックを追加する際は、後でテストしやすいようUIから分離した純粋関数として書くこと。
