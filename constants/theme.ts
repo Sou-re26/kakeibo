@@ -16,6 +16,14 @@ export const Colors = {
     icon: '#687076',
     tabIconDefault: '#687076',
     tabIconSelected: tintColorLight,
+    border: '#ccc',
+    accent: '#007AFF', // FAB等の強調色
+    onAccent: '#fff', // accent上のテキスト/アイコン
+    card: '#f4f4f5', // 一覧カードの背景
+    income: '#006300', // 収入金額のテキスト(datavizのsuccess text)
+    sunday: '#d03b3b',
+    saturday: '#256abf',
+    scrim: 'rgba(0,0,0,0.4)', // モーダル背景
   },
   dark: {
     text: '#ECEDEE',
@@ -24,6 +32,60 @@ export const Colors = {
     icon: '#9BA1A6',
     tabIconDefault: '#9BA1A6',
     tabIconSelected: tintColorDark,
+    border: '#333',
+    accent: '#0A84FF',
+    onAccent: '#fff',
+    card: '#1f2123',
+    income: '#0ca30c',
+    sunday: '#e66767',
+    saturday: '#3987e5',
+    scrim: 'rgba(0,0,0,0.6)',
+  },
+};
+
+// カテゴリ別グラフ・タイムラインの色。キーは constants/categories.ts のカテゴリキーに対応し、
+// 'uncategorized' はカテゴリ未選択の取引用。順位でなくカテゴリに固定で紐づける
+// (データの大小で色を並べ替えない)。
+// 色系統はユーザー指定(食費=黄緑、日用雑貨=水色、交通=紫、交際費=赤、エンタメ=オレンジ、
+// 教育・教養=茶、美容・衣服=緑、医療・保険=暗い黄、通信=紺寄り青、水道・光熱=明るい黄、
+// 住まい=ピンク、車=朱、その他=灰)。系統内で明度を自動探索して色覚多様性の分離を最大化済み
+// (最悪ペア: light ΔE6.7 / dark ΔE10.1。ΔE12未達のペアは絵文字アイコン+ラベルの
+// 副次符号化で補う前提。色を変更する場合はdataviz validatorで再検証すること)。
+export const CategoryColors: Record<
+  keyof typeof Colors,
+  Record<string, string>
+> = {
+  light: {
+    food: '#8BC34A',
+    daily: '#0097A7',
+    transport: '#7E57C2',
+    socializing: '#F44336',
+    entertainment: '#EF6C00',
+    education: '#A05B1F',
+    beauty: '#388E3C',
+    medical: '#8F7000',
+    communication: '#2C51A8',
+    utilities: '#D9AA00',
+    housing: '#EC407A',
+    car: '#A93000',
+    other: '#7B7975',
+    uncategorized: '#A3A19A',
+  },
+  dark: {
+    food: '#9CCC65',
+    daily: '#26C6DA',
+    transport: '#9575CD',
+    socializing: '#E64545',
+    entertainment: '#FB8C00',
+    education: '#96591A',
+    beauty: '#58B85C',
+    medical: '#A98600',
+    communication: '#4A5FD0',
+    utilities: '#F0CB00',
+    housing: '#F275A8',
+    car: '#FF7043',
+    other: '#98968F',
+    uncategorized: '#75736D',
   },
 };
 
