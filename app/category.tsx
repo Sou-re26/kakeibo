@@ -1,6 +1,6 @@
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { CATEGORIES, Category } from '@/constants/categories';
+import { CATEGORIES, Category, Subcategory } from '@/constants/categories';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
@@ -9,12 +9,11 @@ export default function CategoryScreen() {
   const { type, amount } = useLocalSearchParams<{ type: string; amount: string }>();
   const [selectedMain, setSelectedMain] = useState<Category | null>(null);
 
-  const handleSelectSub = (sub: string) => {
+  const handleSelectSub = (sub: Subcategory) => {
     if (!selectedMain) return;
-    const categoryLabel = `${type} > ${selectedMain.label} > ${sub}`;
     router.replace({
       pathname: '/detail',
-      params: { type, amount, category: categoryLabel },
+      params: { type, amount, categoryKey: selectedMain.key, subcategoryKey: sub.key },
     });
   };
 
@@ -32,8 +31,8 @@ export default function CategoryScreen() {
         </View>
 
         {selectedMain.subcategories.map((sub) => (
-          <Pressable key={sub} style={styles.row} onPress={() => handleSelectSub(sub)}>
-            <ThemedText style={styles.rowText}>{sub}</ThemedText>
+          <Pressable key={sub.key} style={styles.row} onPress={() => handleSelectSub(sub)}>
+            <ThemedText style={styles.rowText}>{sub.label}</ThemedText>
           </Pressable>
         ))}
       </ThemedView>
@@ -58,7 +57,7 @@ export default function CategoryScreen() {
           <View style={styles.rowTextArea}>
             <ThemedText style={styles.rowTitle}>{cat.label}</ThemedText>
             <ThemedText style={styles.rowSubtitle} numberOfLines={1}>
-              {cat.subcategories.join('、')}
+              {cat.subcategories.map((sub) => sub.label).join('、')}
             </ThemedText>
           </View>
           <ThemedText style={styles.chevron}>›</ThemedText>

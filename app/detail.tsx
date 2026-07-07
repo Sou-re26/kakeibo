@@ -1,23 +1,66 @@
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
+import { asc } from 'drizzle-orm';
 import { router, useLocalSearchParams } from 'expo-router';
-import { useState } from 'react';
-import { Alert, Pressable, StyleSheet, TextInput, View } from 'react-native';
+import { useEffect, useState } from 'react';
+import { Alert, Modal, Pressable, StyleSheet, TextInput, View } from 'react-native';
 
+import { formatCategoryLabel } from '@/constants/categories';
+import { Colors } from '@/constants/theme';
 import { db } from '@/db/client';
-import { transactions } from '@/db/schema';
+import { accounts, transactions, type Account } from '@/db/schema';
+import { useColorScheme } from '@/hooks/use-color-scheme';
 
 export default function DetailScreen() {
-  const { type, amount, category } = useLocalSearchParams<{
+  const colorScheme = useColorScheme() ?? 'light';
+  const { type, amount, categoryKey, subcategoryKey } = useLocalSearchParams<{
     type: string;
     amount: string;
-    category?: string;
+    categoryKey?: string;
+    subcategoryKey?: string;
   }>();
   const [date, setDate] = useState(new Date());
   const [store, setStore] = useState('');
   const [memo, setMemo] = useState('');
   const [isSaving, setIsSaving] = useState(false);
+  const [accountList, setAccountList] = useState<Account[]>([]);
+  const [accountId, setAccountId] = useState<number | null>(null); // 支出/収入: 対象、振替: 出金元
+  const [toAccountId, setToAccountId] = useState<number | null>(null); // 振替の入金先
+  const [pickerTarget, setPickerTarget] = useState<'from' | 'to' | null>(null);
+
+  useEffect(() => {
+    let isActive = true;
+
+    const loadAccounts = async () => {
+      try {
+        const rows = await db.select().from(accounts).orderBy(asc(accounts.id));
+        if (isActive) {
+          setAccountList(rows);
+        }
+      } catch (error) {
+        console.error(error);
+      }
+    };
+
+    loadAccounts();
+
+    return () => {
+      isActive = false;
+    };
+  }, []);
+
+  const accountName = (id: number | null) =>
+    accountList.find((acc) => acc.id === id)?.name ?? '指定なし';
+
+  const selectAccount = (id: number | null) => {
+    if (pickerTarget === 'to') {
+      setToAccountId(id);
+    } else {
+      setAccountId(id);
+    }
+    setPickerTarget(null);
+  };
 
   const formattedDate = `${date.getFullYear()}年${date.getMonth() + 1}月${date.getDate()}日(${
     ['日', '月', '火', '水', '木', '金', '土'][date.getDay()]
@@ -35,12 +78,20 @@ export default function DetailScreen() {
       return;
     }
 
+    if (type === '振替' && accountId !== null && accountId === toAccountId) {
+      Alert.alert('保存できません', '出金元と入金先が同じ口座です。');
+      return;
+    }
+
     try {
       setIsSaving(true);
       await db.insert(transactions).values({
         type,
         amount: parsedAmount,
-        category: category ?? null,
+        categoryKey: categoryKey ?? null,
+        subcategoryKey: subcategoryKey ?? null,
+        accountId,
+        toAccountId: type === '振替' ? toAccountId : null,
         store: store.trim() || null,
         memo: memo.trim() || null,
         date,
@@ -109,15 +160,28 @@ export default function DetailScreen() {
       >
         <ThemedText style={styles.icon}>🍴</ThemedText>
         <ThemedText style={styles.rowText}>
-          {category ?? 'カテゴリを選択'}
+          {formatCategoryLabel(categoryKey, subcategoryKey) ?? 'カテゴリを選択'}
         </ThemedText>
       </Pressable>
       
-      {/* 財布(ダミー) */}
-      <View style={styles.row}>
-        <ThemedText style={styles.icon}>🐷</ThemedText>
-        <ThemedText style={styles.rowText}>財布</ThemedText>
-      </View>
+      {/* 口座 */}
+      {type === '振替' ? (
+        <>
+          <Pressable style={styles.row} onPress={() => setPickerTarget('from')}>
+            <ThemedText style={styles.icon}>🐷</ThemedText>
+            <ThemedText style={styles.rowText}>出金元: {accountName(accountId)}</ThemedText>
+          </Pressable>
+          <Pressable style={styles.row} onPress={() => setPickerTarget('to')}>
+            <ThemedText style={styles.icon}>💰</ThemedText>
+            <ThemedText style={styles.rowText}>入金先: {accountName(toAccountId)}</ThemedText>
+          </Pressable>
+        </>
+      ) : (
+        <Pressable style={styles.row} onPress={() => setPickerTarget('from')}>
+          <ThemedText style={styles.icon}>🐷</ThemedText>
+          <ThemedText style={styles.rowText}>財布: {accountName(accountId)}</ThemedText>
+        </Pressable>
+      )}
 
       {/* お店 */}
       <View style={styles.row}>
@@ -149,6 +213,38 @@ export default function DetailScreen() {
       >
         <ThemedText style={styles.saveText}>{isSaving ? '保存中...' : '記録する'}</ThemedText>
       </Pressable>
+
+      {/* 口座選択モーダル */}
+      <Modal
+        visible={pickerTarget !== null}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setPickerTarget(null)}
+      >
+        <Pressable
+          style={[styles.modalBackdrop, { backgroundColor: Colors[colorScheme].scrim }]}
+          onPress={() => setPickerTarget(null)}
+        >
+          <View style={[styles.modalSheet, { backgroundColor: Colors[colorScheme].background }]}>
+            <ThemedText type="defaultSemiBold" style={styles.modalTitle}>
+              {pickerTarget === 'to' ? '入金先の口座' : '口座を選択'}
+            </ThemedText>
+            <Pressable style={styles.modalRow} onPress={() => selectAccount(null)}>
+              <ThemedText style={styles.rowText}>指定なし</ThemedText>
+            </Pressable>
+            {accountList.map((acc) => (
+              <Pressable key={acc.id} style={styles.modalRow} onPress={() => selectAccount(acc.id)}>
+                <ThemedText style={styles.rowText}>{acc.name}</ThemedText>
+              </Pressable>
+            ))}
+            {accountList.length === 0 ? (
+              <ThemedText style={styles.modalEmpty}>
+                口座がありません。「残高」タブから追加できます。
+              </ThemedText>
+            ) : null}
+          </View>
+        </Pressable>
+      </Modal>
     </ThemedView>
   );
 }
@@ -231,5 +327,28 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     fontWeight: 'bold',
+  },
+  modalBackdrop: {
+    flex: 1,
+    justifyContent: 'center',
+    padding: 32,
+  },
+  modalSheet: {
+    borderRadius: 16,
+    padding: 20,
+  },
+  modalTitle: {
+    fontSize: 18,
+    marginBottom: 8,
+  },
+  modalRow: {
+    paddingVertical: 14,
+    borderBottomWidth: 0.5,
+    borderColor: '#ddd',
+  },
+  modalEmpty: {
+    paddingVertical: 12,
+    opacity: 0.6,
+    fontSize: 14,
   },
 });
