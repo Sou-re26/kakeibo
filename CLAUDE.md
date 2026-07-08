@@ -90,7 +90,6 @@ npm run check            # lint+型チェック一括(コミット前に実行)
 - **input/category/detail にデフォルトヘッダーが付く:** ルートStackで `options` 未指定のため、各画面の自前ヘッダーと二重になる。
 
 ### 未実装
-- **収入・振替のカテゴリが支出用と共通(次のタスク):** `constants/categories.ts` は支出向けカテゴリのみで、`app/category.tsx` は種別に関わらず同じ一覧を表示する。収入用カテゴリ(給与・賞与・副収入等)の分離が必要。カテゴリマスタに種別の概念を持たせる設計変更を伴う。
 - `app/detail.tsx` の日付選択はAndroid専用(`DateTimePickerAndroid` 直呼び)。iOS未対応。
 - `app/input.tsx` の「カテゴリ選択」ボタンに `onPress` が未設定。
 - 取引の編集・削除機能なし。

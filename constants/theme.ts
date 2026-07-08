@@ -5,6 +5,8 @@
 
 import { Platform } from 'react-native';
 
+import { INCOME_CATEGORIES } from '@/constants/categories';
+
 const tintColorLight = '#0a7ea4';
 const tintColorDark = '#fff';
 
@@ -51,6 +53,12 @@ export const Colors = {
 // 住まい=ピンク、車=朱、その他=灰)。系統内で明度を自動探索して色覚多様性の分離を最大化済み
 // (最悪ペア: light ΔE6.7 / dark ΔE10.1。ΔE12未達のペアは絵文字アイコン+ラベルの
 // 副次符号化で補う前提。色を変更する場合はdataviz validatorで再検証すること)。
+//
+// 収入カテゴリは色分けせず黒系一色で統一する(識別はラベルで行う方針)。キーは
+// constants/categories.ts の INCOME_CATEGORIES から取り込み、二重管理を避ける。
+const incomeColors = (color: string): Record<string, string> =>
+  Object.fromEntries(INCOME_CATEGORIES.map((cat) => [cat.key, color]));
+
 export const CategoryColors: Record<
   keyof typeof Colors,
   Record<string, string>
@@ -70,6 +78,7 @@ export const CategoryColors: Record<
     car: '#A93000',
     other: '#7B7975',
     uncategorized: '#A3A19A',
+    ...incomeColors('#212121'), // 黒系(白背景上でも視認できる近黒)
   },
   dark: {
     food: '#9CCC65',
@@ -86,6 +95,7 @@ export const CategoryColors: Record<
     car: '#FF7043',
     other: '#98968F',
     uncategorized: '#75736D',
+    ...incomeColors('#424242'), // 黒系(暗背景 #151718 上でも分離する濃灰)
   },
 };
 

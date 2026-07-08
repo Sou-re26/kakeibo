@@ -153,17 +153,19 @@ export default function DetailScreen() {
         <ThemedText style={styles.rowText}>{formattedDate}</ThemedText>
       </Pressable>
 
-      {/* カテゴリ */}
-      <Pressable
-        style={styles.row}
-        onPress={() => router.push({ pathname: '/category', params: { type, amount } })}
-      >
-        <ThemedText style={styles.icon}>🍴</ThemedText>
-        <ThemedText style={styles.rowText}>
-          {formatCategoryLabel(categoryKey, subcategoryKey) ?? 'カテゴリを選択'}
-        </ThemedText>
-      </Pressable>
-      
+      {/* カテゴリ(振替は資産移動なのでカテゴリを持たない) */}
+      {type !== '振替' ? (
+        <Pressable
+          style={styles.row}
+          onPress={() => router.push({ pathname: '/category', params: { type, amount } })}
+        >
+          <ThemedText style={styles.icon}>🍴</ThemedText>
+          <ThemedText style={styles.rowText}>
+            {formatCategoryLabel(categoryKey, subcategoryKey) ?? 'カテゴリを選択'}
+          </ThemedText>
+        </Pressable>
+      ) : null}
+
       {/* 口座 */}
       {type === '振替' ? (
         <>

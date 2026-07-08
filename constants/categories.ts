@@ -7,7 +7,7 @@ export type Category = {
   key: string;
   label: string;
   icon: string;
-  subcategories: Subcategory[];
+  subcategories: Subcategory[]; // 空配列=サブカテゴリなし(タップで即確定)
 };
 
 export const CATEGORIES: Category[] = [
@@ -162,9 +162,22 @@ export const CATEGORIES: Category[] = [
   },
 ];
 
+// 収入カテゴリ。サブカテゴリは持たない(フラット)。キーは支出カテゴリと重複しない。
+export const INCOME_CATEGORIES: Category[] = [
+  { key: 'salary', label: '給与所得', icon: '💴', subcategories: [] },
+  { key: 'reimbursement', label: '立替金返済', icon: '🔄', subcategories: [] },
+  { key: 'bonus', label: '賞与', icon: '🎁', subcategories: [] },
+  { key: 'windfall', label: '臨時収入', icon: '✨', subcategories: [] },
+  { key: 'business', label: '事業所得', icon: '💼', subcategories: [] },
+  { key: 'other_income', label: 'その他', icon: '📦', subcategories: [] },
+];
+
 export function getCategory(categoryKey: string | null | undefined): Category | undefined {
   if (!categoryKey) return undefined;
-  return CATEGORIES.find((cat) => cat.key === categoryKey);
+  return (
+    CATEGORIES.find((cat) => cat.key === categoryKey) ??
+    INCOME_CATEGORIES.find((cat) => cat.key === categoryKey)
+  );
 }
 
 export function getCategoryLabel(categoryKey: string | null | undefined): string | null {

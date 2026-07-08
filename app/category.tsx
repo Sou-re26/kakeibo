@@ -1,13 +1,23 @@
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { CATEGORIES, Category, Subcategory } from '@/constants/categories';
+import { CATEGORIES, Category, INCOME_CATEGORIES, Subcategory } from '@/constants/categories';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 
 export default function CategoryScreen() {
   const { type, amount } = useLocalSearchParams<{ type: string; amount: string }>();
+  const categories = type === '収入' ? INCOME_CATEGORIES : CATEGORIES;
   const [selectedMain, setSelectedMain] = useState<Category | null>(null);
+
+  // サブカテゴリを持つカテゴリは小カテゴリ選択へ、持たない(収入等)ものはタップで即確定
+  const handleSelectMain = (cat: Category) => {
+    if (cat.subcategories.length === 0) {
+      router.replace({ pathname: '/detail', params: { type, amount, categoryKey: cat.key } });
+      return;
+    }
+    setSelectedMain(cat);
+  };
 
   const handleSelectSub = (sub: Subcategory) => {
     if (!selectedMain) return;
@@ -51,14 +61,16 @@ export default function CategoryScreen() {
         </ThemedText>
       </View>
 
-      {CATEGORIES.map((cat) => (
-        <Pressable key={cat.key} style={styles.row} onPress={() => setSelectedMain(cat)}>
+      {categories.map((cat) => (
+        <Pressable key={cat.key} style={styles.row} onPress={() => handleSelectMain(cat)}>
           <ThemedText style={styles.icon}>{cat.icon}</ThemedText>
           <View style={styles.rowTextArea}>
             <ThemedText style={styles.rowTitle}>{cat.label}</ThemedText>
-            <ThemedText style={styles.rowSubtitle} numberOfLines={1}>
-              {cat.subcategories.map((sub) => sub.label).join('、')}
-            </ThemedText>
+            {cat.subcategories.length > 0 ? (
+              <ThemedText style={styles.rowSubtitle} numberOfLines={1}>
+                {cat.subcategories.map((sub) => sub.label).join('、')}
+              </ThemedText>
+            ) : null}
           </View>
           <ThemedText style={styles.chevron}>›</ThemedText>
         </Pressable>
