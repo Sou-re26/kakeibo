@@ -78,9 +78,15 @@ export default function DetailScreen() {
       return;
     }
 
-    if (type === '振替' && accountId !== null && accountId === toAccountId) {
-      Alert.alert('保存できません', '出金元と入金先が同じ口座です。');
-      return;
+    if (type === '振替') {
+      if (accountId === null || toAccountId === null) {
+        Alert.alert('保存できません', '振替には出金元と入金先の口座を指定してください。');
+        return;
+      }
+      if (accountId === toAccountId) {
+        Alert.alert('保存できません', '出金元と入金先が同じ口座です。');
+        return;
+      }
     }
 
     try {
