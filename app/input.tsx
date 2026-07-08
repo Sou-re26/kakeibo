@@ -6,7 +6,8 @@ import { Pressable, StyleSheet, View } from 'react-native';
 
 type TransactionType = '支出' | '収入' | '振替';
 
-const KEYS = ['7', '8', '9', '4', '5', '6', '1', '2', '3', '00', '0', '.'];
+// JPYに小数はないため小数点キーは持たない。最後のセルは格子維持用の空きスロット
+const KEYS: (string | null)[] = ['7', '8', '9', '4', '5', '6', '1', '2', '3', '00', '0', null];
 
 const TYPE_COLORS: Record<TransactionType, string> = {
   支出: '#4CAF50',
@@ -20,10 +21,6 @@ export default function InputScreen() {
 
   const handleKeyPress = (key: string) => {
     setAmount((prev) => {
-      if (key === '.') {
-        // すでに小数点があれば追加しない
-        return prev.includes('.') ? prev : prev + '.';
-      }
       if (prev === '0') {
         return key === '00' ? '0' : key;
       }
@@ -73,11 +70,15 @@ export default function InputScreen() {
 
       {/* テンキー */}
       <View style={styles.keypad}>
-        {KEYS.map((key, index) => (
-          <Pressable key={index} style={styles.key} onPress={() => handleKeyPress(key)}>
-            <ThemedText style={styles.keyText}>{key}</ThemedText>
-          </Pressable>
-        ))}
+        {KEYS.map((key, index) =>
+          key === null ? (
+            <View key={index} style={styles.key} />
+          ) : (
+            <Pressable key={index} style={styles.key} onPress={() => handleKeyPress(key)}>
+              <ThemedText style={styles.keyText}>{key}</ThemedText>
+            </Pressable>
+          ),
+        )}
       </View>
 
       {/* 下部エリア:カテゴリ選択・次へ・削除 */}

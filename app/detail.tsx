@@ -73,8 +73,8 @@ export default function DetailScreen() {
     }
 
     const parsedAmount = Number(amount);
-    if (Number.isNaN(parsedAmount)) {
-      Alert.alert('保存できません', '金額の形式が正しくありません。');
+    if (!Number.isInteger(parsedAmount)) {
+      Alert.alert('保存できません', '金額は整数(円)で入力してください。');
       return;
     }
 
