@@ -1,5 +1,5 @@
 import { StyleSheet, View } from 'react-native';
-import Svg, { Path } from 'react-native-svg';
+import Svg, { G, Path, Text as SvgText } from 'react-native-svg';
 
 import { ThemedText } from '@/components/themed-text';
 import { CategoryColors, Colors } from '@/constants/theme';
@@ -10,6 +10,8 @@ export type PieChartDatum = {
   key: string;
   value: number;
   color: string;
+  /** スライス内に小さく表示するラベル(スペースが足りないスライスでは省略される) */
+  label?: string;
 };
 
 type Props = {
@@ -20,6 +22,26 @@ type Props = {
 };
 
 const INNER_RADIUS_RATIO = 0.62;
+const LABEL_FONT = 9;
+const RATIO_FONT = 8;
+
+// スライス色の明度でラベル文字色(近黒/近白)を選ぶ。テーマのtextトークンを流用する
+function labelColorFor(hex: string): string {
+  const r = parseInt(hex.slice(1, 3), 16) / 255;
+  const g = parseInt(hex.slice(3, 5), 16) / 255;
+  const b = parseInt(hex.slice(5, 7), 16) / 255;
+  const luminance = 0.299 * r + 0.587 * g + 0.114 * b;
+  return luminance > 0.6 ? Colors.light.text : Colors.dark.text;
+}
+
+// 全角中心のラベル幅の概算(px)。ASCIIは半角扱い
+function estimateTextWidth(text: string, fontSize: number): number {
+  let width = 0;
+  for (const ch of text) {
+    width += ch.charCodeAt(0) <= 0x7f ? fontSize * 0.6 : fontSize;
+  }
+  return width;
+}
 
 export function PieChart({ data, size, centerTitle, centerValue }: Props) {
   const colorScheme = useColorScheme() ?? 'light';
@@ -32,6 +54,8 @@ export function PieChart({ data, size, centerTitle, centerValue }: Props) {
   const center = size / 2;
   const outerRadius = size / 2;
   const innerRadius = outerRadius * INNER_RADIUS_RATIO;
+  const labelRadius = (outerRadius + innerRadius) / 2;
+  const ringWidth = outerRadius - innerRadius;
 
   return (
     <View style={{ width: size, height: size }}>
@@ -60,15 +84,62 @@ export function PieChart({ data, size, centerTitle, centerValue }: Props) {
             />
           ))
         )}
+
+        {/* スライス内のカテゴリ名+割合。弧の長さ・リング幅に収まるものだけ表示する */}
+        {visible.map((d, i) => {
+          if (!d.label) return null;
+          const { startAngle, endAngle, ratio } = angles[i];
+          const ratioText = `${Math.round(ratio * 100)}%`;
+          const maxWidth = Math.max(
+            estimateTextWidth(d.label, LABEL_FONT),
+            estimateTextWidth(ratioText, RATIO_FONT),
+          );
+          const arcLength = (endAngle - startAngle) * labelRadius;
+          if (ringWidth < LABEL_FONT + RATIO_FONT + 6 || arcLength < maxWidth + 6) {
+            return null;
+          }
+          const midAngle = (startAngle + endAngle) / 2;
+          const x = center + labelRadius * Math.sin(midAngle);
+          const y = center - labelRadius * Math.cos(midAngle);
+          const color = labelColorFor(d.color);
+          return (
+            <G key={`label-${d.key}`}>
+              <SvgText x={x} y={y - 2} fontSize={LABEL_FONT} fill={color} textAnchor="middle">
+                {d.label}
+              </SvgText>
+              <SvgText
+                x={x}
+                y={y + RATIO_FONT + 1}
+                fontSize={RATIO_FONT}
+                fill={color}
+                textAnchor="middle"
+              >
+                {ratioText}
+              </SvgText>
+            </G>
+          );
+        })}
       </Svg>
       {centerTitle || centerValue ? (
         <View style={styles.center} pointerEvents="none">
-          {centerTitle ? <ThemedText style={styles.centerTitle}>{centerTitle}</ThemedText> : null}
-          {centerValue ? (
-            <ThemedText type="defaultSemiBold" style={styles.centerValue}>
-              {centerValue}
-            </ThemedText>
-          ) : null}
+          {/* 中央の穴に収める(長い金額はフォントを自動縮小して重なりを防ぐ) */}
+          <View style={{ width: innerRadius * 2 - 12, alignItems: 'center' }}>
+            {centerTitle ? (
+              <ThemedText style={styles.centerTitle} numberOfLines={1}>
+                {centerTitle}
+              </ThemedText>
+            ) : null}
+            {centerValue ? (
+              <ThemedText
+                type="defaultSemiBold"
+                style={styles.centerValue}
+                numberOfLines={1}
+                adjustsFontSizeToFit
+              >
+                {centerValue}
+              </ThemedText>
+            ) : null}
+          </View>
         </View>
       ) : null}
     </View>
