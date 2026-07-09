@@ -5,6 +5,8 @@ import { StatusBar } from 'expo-status-bar';
 import { Text } from 'react-native';
 import 'react-native-reanimated';
 
+import { SettingsProvider } from '@/contexts/settings';
+import { TransactionDraftProvider } from '@/contexts/transaction-draft';
 import { db } from '@/db/client';
 import migrations from '@/drizzle/migrations';
 import { useColorScheme } from '@/hooks/use-color-scheme';
@@ -27,10 +29,18 @@ export default function RootLayout() {
 
   return (
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <Stack>
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
-      </Stack>
+      <SettingsProvider>
+        <TransactionDraftProvider>
+          <Stack>
+            <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+            {/* ウィザード3画面は画面内ヘッダー(✕/←+画面名)を持つため、デフォルトヘッダーを消す */}
+            <Stack.Screen name="input" options={{ headerShown: false }} />
+            <Stack.Screen name="detail" options={{ headerShown: false }} />
+            <Stack.Screen name="category" options={{ headerShown: false }} />
+            <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
+          </Stack>
+        </TransactionDraftProvider>
+      </SettingsProvider>
       <StatusBar style="auto" />
     </ThemeProvider>
   );
