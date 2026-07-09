@@ -1,19 +1,22 @@
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { CATEGORIES, Category, INCOME_CATEGORIES, Subcategory } from '@/constants/categories';
-import { router, useLocalSearchParams } from 'expo-router';
+import { useTransactionDraft } from '@/contexts/transaction-draft';
+import { router } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 
 export default function CategoryScreen() {
-  const { type, amount } = useLocalSearchParams<{ type: string; amount: string }>();
-  const categories = type === '収入' ? INCOME_CATEGORIES : CATEGORIES;
+  const { draft, updateDraft } = useTransactionDraft();
+  const categories = draft.type === '収入' ? INCOME_CATEGORIES : CATEGORIES;
   const [selectedMain, setSelectedMain] = useState<Category | null>(null);
 
+  // 下書きへ書き込んで back で戻る(replace だと detail が新インスタンスになり入力が消える)
   // サブカテゴリを持つカテゴリは小カテゴリ選択へ、持たない(収入等)ものはタップで即確定
   const handleSelectMain = (cat: Category) => {
     if (cat.subcategories.length === 0) {
-      router.replace({ pathname: '/detail', params: { type, amount, categoryKey: cat.key } });
+      updateDraft({ categoryKey: cat.key, subcategoryKey: null });
+      router.back();
       return;
     }
     setSelectedMain(cat);
@@ -21,10 +24,8 @@ export default function CategoryScreen() {
 
   const handleSelectSub = (sub: Subcategory) => {
     if (!selectedMain) return;
-    router.replace({
-      pathname: '/detail',
-      params: { type, amount, categoryKey: selectedMain.key, subcategoryKey: sub.key },
-    });
+    updateDraft({ categoryKey: selectedMain.key, subcategoryKey: sub.key });
+    router.back();
   };
 
   // 小カテゴリ一覧の表示

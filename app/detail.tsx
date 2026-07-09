@@ -1,33 +1,28 @@
+import { CalculatorSheet } from '@/components/calculator-sheet';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
-import { asc } from 'drizzle-orm';
-import { router, useLocalSearchParams } from 'expo-router';
+import { asc, eq } from 'drizzle-orm';
+import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Alert, Modal, Pressable, StyleSheet, TextInput, View } from 'react-native';
 
 import { formatCategoryLabel } from '@/constants/categories';
 import { Colors } from '@/constants/theme';
+import { useTransactionDraft } from '@/contexts/transaction-draft';
 import { db } from '@/db/client';
 import { accounts, transactions, type Account } from '@/db/schema';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 
 export default function DetailScreen() {
   const colorScheme = useColorScheme() ?? 'light';
-  const { type, amount, categoryKey, subcategoryKey } = useLocalSearchParams<{
-    type: string;
-    amount: string;
-    categoryKey?: string;
-    subcategoryKey?: string;
-  }>();
-  const [date, setDate] = useState(new Date());
-  const [store, setStore] = useState('');
-  const [memo, setMemo] = useState('');
+  const { draft, updateDraft } = useTransactionDraft();
+  const { editingId, type, amount, date, categoryKey, subcategoryKey, accountId, toAccountId } =
+    draft;
   const [isSaving, setIsSaving] = useState(false);
   const [accountList, setAccountList] = useState<Account[]>([]);
-  const [accountId, setAccountId] = useState<number | null>(null); // 支出/収入: 対象、振替: 出金元
-  const [toAccountId, setToAccountId] = useState<number | null>(null); // 振替の入金先
   const [pickerTarget, setPickerTarget] = useState<'from' | 'to' | null>(null);
+  const [isCalculatorOpen, setIsCalculatorOpen] = useState(false);
 
   useEffect(() => {
     let isActive = true;
@@ -55,9 +50,9 @@ export default function DetailScreen() {
 
   const selectAccount = (id: number | null) => {
     if (pickerTarget === 'to') {
-      setToAccountId(id);
+      updateDraft({ toAccountId: id });
     } else {
-      setAccountId(id);
+      updateDraft({ accountId: id });
     }
     setPickerTarget(null);
   };
@@ -67,11 +62,6 @@ export default function DetailScreen() {
   })　${date.getHours()}時`;
 
   const handleSave = async () => {
-    if (!type || !amount) {
-      Alert.alert('保存できません', '種別と金額が必要です。');
-      return;
-    }
-
     const parsedAmount = Number(amount);
     if (!Number.isInteger(parsedAmount)) {
       Alert.alert('保存できません', '金額は整数(円)で入力してください。');
@@ -89,26 +79,63 @@ export default function DetailScreen() {
       }
     }
 
+    // タグは読点/カンマ区切りを許容し、カンマ区切りへ正規化して保存する
+    const normalizedTags = draft.tags
+      .split(/[,、]/)
+      .map((tag) => tag.trim())
+      .filter(Boolean)
+      .join(',');
+
+    // 編集で種別を切り替えた場合に、旧種別のカテゴリ/入金先が残らないよう保存時に正規化する
+    const payload = {
+      type,
+      amount: parsedAmount,
+      categoryKey: type === '振替' ? null : categoryKey,
+      subcategoryKey: type === '振替' ? null : subcategoryKey,
+      accountId,
+      toAccountId: type === '振替' ? toAccountId : null,
+      store: draft.store.trim() || null,
+      memo: draft.memo.trim() || null,
+      tags: normalizedTags || null,
+      date,
+    };
+
     try {
       setIsSaving(true);
-      await db.insert(transactions).values({
-        type,
-        amount: parsedAmount,
-        categoryKey: categoryKey ?? null,
-        subcategoryKey: subcategoryKey ?? null,
-        accountId,
-        toAccountId: type === '振替' ? toAccountId : null,
-        store: store.trim() || null,
-        memo: memo.trim() || null,
-        date,
-      });
-      router.replace('/(tabs)');
+      if (editingId !== null) {
+        await db.update(transactions).set(payload).where(eq(transactions.id, editingId));
+        // 編集は入出金タブや口座詳細から入るため、input と detail の2画面分だけ戻る
+        router.dismiss(2);
+      } else {
+        await db.insert(transactions).values(payload);
+        router.replace('/(tabs)');
+      }
     } catch (error) {
       console.error(error);
       Alert.alert('保存に失敗しました', 'もう一度お試しください。');
     } finally {
       setIsSaving(false);
     }
+  };
+
+  const handleDelete = () => {
+    if (editingId === null) return;
+    Alert.alert('記録を削除', 'この記録を削除しますか?', [
+      { text: 'キャンセル', style: 'cancel' },
+      {
+        text: '削除',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            await db.delete(transactions).where(eq(transactions.id, editingId));
+            router.dismiss(2);
+          } catch (error) {
+            console.error(error);
+            Alert.alert('削除に失敗しました', 'もう一度お試しください。');
+          }
+        },
+      },
+    ]);
   };
 
   const openDatePicker = () => {
@@ -128,7 +155,7 @@ export default function DetailScreen() {
             const combined = new Date(selectedDate);
             combined.setHours(selectedTime.getHours());
             combined.setMinutes(selectedTime.getMinutes());
-            setDate(combined);
+            updateDraft({ date: combined });
           },
         });
       },
@@ -143,15 +170,15 @@ export default function DetailScreen() {
           <ThemedText style={styles.closeIcon}>✕</ThemedText>
         </Pressable>
         <ThemedText type="title" style={styles.headerTitle}>
-          記録の詳細
+          {editingId !== null ? '記録の編集' : '記録の詳細'}
         </ThemedText>
       </View>
 
-      {/* 金額表示 */}
-      <View style={styles.amountRow}>
+      {/* 金額表示(タップで電卓) */}
+      <Pressable style={styles.amountRow} onPress={() => setIsCalculatorOpen(true)}>
         <ThemedText style={styles.currencyLabel}>¥{'\n'}JPY</ThemedText>
-        <ThemedText style={styles.amountText}>{amount}</ThemedText>
-      </View>
+        <ThemedText style={styles.amountText}>{Number(amount).toLocaleString()}</ThemedText>
+      </Pressable>
 
       {/* 日付・時刻 */}
       <Pressable style={styles.row} onPress={openDatePicker}>
@@ -161,10 +188,7 @@ export default function DetailScreen() {
 
       {/* カテゴリ(振替は資産移動なのでカテゴリを持たない) */}
       {type !== '振替' ? (
-        <Pressable
-          style={styles.row}
-          onPress={() => router.push({ pathname: '/category', params: { type, amount } })}
-        >
+        <Pressable style={styles.row} onPress={() => router.push('/category')}>
           <ThemedText style={styles.icon}>🍴</ThemedText>
           <ThemedText style={styles.rowText}>
             {formatCategoryLabel(categoryKey, subcategoryKey) ?? 'カテゴリを選択'}
@@ -195,21 +219,36 @@ export default function DetailScreen() {
       <View style={styles.row}>
         <ThemedText style={styles.icon}>🏬</ThemedText>
         <TextInput
-          style={styles.rowInput}
+          style={[styles.rowInput, { color: Colors[colorScheme].text }]}
           placeholder="お店"
-          placeholderTextColor="#999"
-          value={store}
-          onChangeText={setStore}
+          placeholderTextColor={Colors[colorScheme].icon}
+          value={draft.store}
+          onChangeText={(text) => updateDraft({ store: text })}
+        />
+      </View>
+
+      {/* タグ */}
+      <View style={styles.row}>
+        <ThemedText style={styles.icon}>🏷️</ThemedText>
+        <TextInput
+          style={[styles.rowInput, { color: Colors[colorScheme].text }]}
+          placeholder="タグ(カンマ区切り)"
+          placeholderTextColor={Colors[colorScheme].icon}
+          value={draft.tags}
+          onChangeText={(text) => updateDraft({ tags: text })}
         />
       </View>
 
       {/* メモ */}
       <TextInput
-        style={styles.memoBox}
+        style={[
+          styles.memoBox,
+          { color: Colors[colorScheme].text, backgroundColor: Colors[colorScheme].card },
+        ]}
         placeholder="メモ"
-        placeholderTextColor="#999"
-        value={memo}
-        onChangeText={setMemo}
+        placeholderTextColor={Colors[colorScheme].icon}
+        value={draft.memo}
+        onChangeText={(text) => updateDraft({ memo: text })}
         multiline
       />
 
@@ -221,6 +260,21 @@ export default function DetailScreen() {
       >
         <ThemedText style={styles.saveText}>{isSaving ? '保存中...' : '記録する'}</ThemedText>
       </Pressable>
+
+      {/* 削除(編集時のみ) */}
+      {editingId !== null ? (
+        <Pressable style={styles.deleteButton} onPress={handleDelete}>
+          <ThemedText style={{ color: Colors[colorScheme].critical }}>この記録を削除</ThemedText>
+        </Pressable>
+      ) : null}
+
+      {/* 電卓(金額タップで下から表示) */}
+      <CalculatorSheet
+        visible={isCalculatorOpen}
+        initialAmount={amount}
+        onClose={() => setIsCalculatorOpen(false)}
+        onConfirm={(value) => updateDraft({ amount: String(value) })}
+      />
 
       {/* 口座選択モーダル */}
       <Modal
@@ -309,12 +363,10 @@ const styles = StyleSheet.create({
   rowInput: {
     fontSize: 16,
     flex: 1,
-    color: '#000',
   },
   memoBox: {
     marginTop: 16,
     minHeight: 100,
-    backgroundColor: '#eee',
     borderRadius: 8,
     padding: 16,
     fontSize: 16,
@@ -322,7 +374,6 @@ const styles = StyleSheet.create({
   },
   saveButton: {
     marginTop: 'auto',
-    marginBottom: 20,
     backgroundColor: '#4CAF50',
     paddingVertical: 16,
     borderRadius: 24,
@@ -335,6 +386,11 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     fontWeight: 'bold',
+  },
+  deleteButton: {
+    alignItems: 'center',
+    paddingVertical: 14,
+    marginBottom: 6,
   },
   modalBackdrop: {
     flex: 1,

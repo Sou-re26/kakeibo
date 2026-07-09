@@ -52,7 +52,7 @@ export default function AccountScreen() {
           const d = accountDelta(accountId, txRows);
           setName(rows[0].name);
           setDelta(d);
-          setBalanceText(String(rows[0].balance + d));
+          setBalanceText((rows[0].balance + d).toLocaleString());
         }
       } catch (error) {
         console.error(error);

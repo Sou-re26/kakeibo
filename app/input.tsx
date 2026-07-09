@@ -1,10 +1,9 @@
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { router } from 'expo-router';
-import { useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 
-type TransactionType = '支出' | '収入' | '振替';
+import { useTransactionDraft, type TransactionType } from '@/contexts/transaction-draft';
 
 // JPYに小数はないため小数点キーは持たない。最後のセルは格子維持用の空きスロット
 const KEYS: (string | null)[] = ['7', '8', '9', '4', '5', '6', '1', '2', '3', '00', '0', null];
@@ -16,44 +15,49 @@ const TYPE_COLORS: Record<TransactionType, string> = {
 };
 
 export default function InputScreen() {
-  const [type, setType] = useState<TransactionType>('支出');
-  const [amount, setAmount] = useState('0');
+  const { draft, updateDraft } = useTransactionDraft();
+  const { type, amount } = draft;
 
   const handleKeyPress = (key: string) => {
-    setAmount((prev) => {
-      if (prev === '0') {
-        return key === '00' ? '0' : key;
-      }
-      if (prev.length >= 9) return prev;
-      return prev + key;
-    });
+    if (amount === '0') {
+      updateDraft({ amount: key === '00' ? '0' : key });
+      return;
+    }
+    if (amount.length >= 9) return;
+    updateDraft({ amount: amount + key });
   };
 
   const handleDelete = () => {
-    setAmount((prev) => (prev.length > 1 ? prev.slice(0, -1) : '0'));
+    updateDraft({ amount: amount.length > 1 ? amount.slice(0, -1) : '0' });
   };
 
   const handleNext = () => {
-    // TODO: カテゴリ選択画面へ遷移、または保存処理
-    console.log('種別:', type, '金額:', amount);
-    router.push({
-      pathname: '/detail',
-      params: { type, amount },
-    });
+    router.push('/detail');
   };
 
   return (
     <ThemedView style={styles.container}>
+      {/* ヘッダー(ルートStackのヘッダーは _layout.tsx で非表示にしている) */}
+      <View style={styles.header}>
+        <Pressable onPress={() => router.back()}>
+          <ThemedText style={styles.closeIcon}>✕</ThemedText>
+        </Pressable>
+        <ThemedText type="title" style={styles.headerTitle}>
+          金額の入力
+        </ThemedText>
+      </View>
+
       {/* 種別タブ */}
       <View style={styles.typeRow}>
         {(['支出', '収入', '振替'] as TransactionType[]).map((t) => (
           <Pressable
             key={t}
-            style={[
+            style={({ pressed }) => [
               styles.typeButton,
               type === t && { backgroundColor: TYPE_COLORS[t] },
+              pressed && styles.pressed,
             ]}
-            onPress={() => setType(t)}
+            onPress={() => updateDraft({ type: t })}
           >
             <ThemedText style={type === t ? styles.typeTextActive : styles.typeText}>
               {t}
@@ -65,7 +69,7 @@ export default function InputScreen() {
       {/* 金額表示 */}
       <View style={styles.displayArea}>
         <ThemedText style={styles.currencyLabel}>¥ JPY</ThemedText>
-        <ThemedText style={styles.amountText}>{amount}</ThemedText>
+        <ThemedText style={styles.amountText}>{Number(amount).toLocaleString()}</ThemedText>
       </View>
 
       {/* テンキー */}
@@ -74,7 +78,11 @@ export default function InputScreen() {
           key === null ? (
             <View key={index} style={styles.key} />
           ) : (
-            <Pressable key={index} style={styles.key} onPress={() => handleKeyPress(key)}>
+            <Pressable
+              key={index}
+              style={({ pressed }) => [styles.key, pressed && styles.keyPressed]}
+              onPress={() => handleKeyPress(key)}
+            >
               <ThemedText style={styles.keyText}>{key}</ThemedText>
             </Pressable>
           ),
@@ -87,11 +95,21 @@ export default function InputScreen() {
           <ThemedText style={styles.categoryText}>カテゴリ選択</ThemedText>
         </Pressable>
 
-        <Pressable style={[styles.nextButton, { backgroundColor: TYPE_COLORS[type] }]} onPress={handleNext}>
+        <Pressable
+          style={({ pressed }) => [
+            styles.nextButton,
+            { backgroundColor: TYPE_COLORS[type] },
+            pressed && styles.pressed,
+          ]}
+          onPress={handleNext}
+        >
           <ThemedText style={styles.nextText}>次へ</ThemedText>
         </Pressable>
 
-        <Pressable style={styles.deleteButton} onPress={handleDelete}>
+        <Pressable
+          style={({ pressed }) => [styles.deleteButton, pressed && styles.pressed]}
+          onPress={handleDelete}
+        >
           <ThemedText style={styles.deleteText}>⌫</ThemedText>
         </Pressable>
       </View>
@@ -103,6 +121,19 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     paddingTop: 60,
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 20,
+    paddingHorizontal: 16,
+    marginBottom: 16,
+  },
+  closeIcon: {
+    fontSize: 28,
+  },
+  headerTitle: {
+    fontSize: 22,
   },
   typeRow: {
     flexDirection: 'row',
@@ -189,5 +220,11 @@ const styles = StyleSheet.create({
   deleteText: {
     color: '#fff',
     fontSize: 18,
+  },
+  pressed: {
+    opacity: 0.6,
+  },
+  keyPressed: {
+    backgroundColor: '#eee', // 既存キーの枠線色と同系(テーマ化は既知の負債と同時に)
   },
 });
