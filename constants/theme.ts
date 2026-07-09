@@ -26,6 +26,7 @@ export const Colors = {
     sunday: '#d03b3b',
     saturday: '#256abf',
     scrim: 'rgba(0,0,0,0.4)', // モーダル背景
+    critical: '#E5484D', // 削除等の破壊的操作の警告色
   },
   dark: {
     text: '#ECEDEE',
@@ -42,6 +43,7 @@ export const Colors = {
     sunday: '#e66767',
     saturday: '#3987e5',
     scrim: 'rgba(0,0,0,0.6)',
+    critical: '#F2555A',
   },
 };
 

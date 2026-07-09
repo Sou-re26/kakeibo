@@ -22,6 +22,12 @@ const MAPPING = {
   'creditcard.fill': 'account-balance-wallet',
   'chart.pie.fill': 'pie-chart',
   'square.and.pencil': 'edit',
+  'gearshape.fill': 'settings',
+  magnifyingglass: 'search',
+  'line.3.horizontal': 'menu',
+  'chevron.down': 'keyboard-arrow-down',
+  'eye.fill': 'visibility',
+  'eye.slash.fill': 'visibility-off',
 } as IconMapping;
 
 /**
