@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## プロジェクト概要
 
-Expo (React Native) 製の家計簿アプリ。expo-router によるファイルベースルーティング、DBは expo-sqlite + Drizzle ORM。現在はプロトタイプ後期(入力→保存→一覧→月次集計・カテゴリ別円グラフ・口座残高の手動管理まで動作。取引の編集・削除、取引と口座の連動は未実装)。
+Expo (React Native) 製の家計簿アプリ。expo-router によるファイルベースルーティング、DBは expo-sqlite + Drizzle ORM。現在はプロトタイプ後期(入力→保存→一覧→月次集計・カテゴリ別円グラフ・口座残高の手動管理・取引の編集・削除・口座別の履歴/残高推移まで動作)。
 
 ## よく使うコマンド
 
@@ -45,22 +45,27 @@ npm run check            # lint+型チェック一括(コミット前に実行)
 
 ### ルーティング (expo-router, typedRoutes有効)
 - `app/(tabs)/` — ボトムタブ4つ。表示順は `_layout.tsx` の記述順で **ホーム(`index`)→ 残高(`balance`)→ 入出金(`history`)→ 分析(`analysis`)**。
-  - `index.tsx` — ホーム。今月の収支+支出内訳の円グラフ(タップで分析タブへ)。
-  - `balance.tsx` — 残高。総残高+口座一覧。行タップで `/account?id=` へ、「口座を追加」で `/account` へ。
-  - `history.tsx` — 入出金。日別グループのタイムライン形式(左に日付(日曜=sunday色/土曜=saturday色)、カテゴリ色のアイコン丸+縦線、右にカード。日ヘッダーに支出合計)。グループ化は `lib/timeline.ts` の純粋関数。
-  - `analysis.tsx` — 分析。今月のカテゴリ別内訳(支出/収入切替+円グラフ+一覧)。ホームの円グラフからもここへ遷移する。
+  - `index.tsx` — ホーム。今月の収支+支出内訳の円グラフ(タップで分析タブへ)+「使ったお金」(`components/spending-summary.tsx`。カテゴリ別/期間別×前月比/予算比/収入比。予算比はカテゴリ別=各カテゴリ自身の予算、期間別=カテゴリ予算の合計と比較。集計は `lib/spending.ts` の純粋関数で、前月比のため表示月数+1ヶ月分を読む)。円グラフ直下に定期収支(`recurrings`)までの残り日数リスト(`lib/recurring.ts` の `nextOccurrence`/`daysUntil`)、収支ボックス直下に定期支出の警告カード(しきい値は設定 `alertDaysBefore`、既定3日)。フォーカス時に `lib/apply-recurrings.ts` の `applyDueRecurrings` を await してから読み込む(**期日が来た定期収支はここで通常の取引として自動記帳される**。金額設定済みのみ。サブカテゴリ・口座も反映され、メモ=名前、タグ=`定期`。`appliedThrough` で冪等)。
+  - `balance.tsx` — 残高。総残高カード(前月末比+全口座合算のスパークライン。合算は `totalTransactionDelta`+`balanceSeriesBy`)+口座カード一覧(頭文字アイコン・現在残高・今月の増減)。行タップで `/account-detail?id=` へ、**長押しでその口座を出金元にした振替を開始**、「口座を追加」で `/account` へ。右上の目アイコンで金額をマスク(`hideBalances` 設定に永続化。マスク中はスパークラインごと非表示)。
+  - `history.tsx` — 入出金。画面内セグメントで「タイムライン」と「カレンダー」を切り替える。タイムラインは日別グループ形式(左に日付(日曜=sunday色/土曜=saturday色)、カテゴリ色のアイコン丸+縦線、右にカード。日ヘッダーに支出合計)。グループ化は `lib/timeline.ts` の純粋関数、描画は `components/transaction-timeline.tsx`(口座詳細・日別シートと共用)。カードタップで取引の編集(下書きへコピーして `/input` へ push)。カレンダーは `components/transaction-calendar.tsx`(月組み立て・種別合計は `lib/calendar.ts`)で、各日に収入(accent色)/支出(文字色)/振替(灰)の総額を3段固定表示(無い種別の段は空けて詰めない)。記録のある日のタップで下からのモーダルシートに当日のタイムラインを表示。定期収支の日には小さなドット(収入=accent/支出=critical。存在しない日は月末へ丸め)を表示。ヘッダー右の虫眼鏡で**検索モーダル**(`components/transaction-search-sheet.tsx`)を開き、種別・期間(プリセット+開始/終了日)・カテゴリ・店名/メモ/タグのキーワード・出金元/入金先口座・金額範囲で絞り込める(判定は `lib/transaction-filter.ts` の純粋関数。タイムライン/カレンダーの両方に適用され、カレンダーの日別合計も絞り込み後の値になる。絞り込み中はセグメント下に条件数・該当件数と「解除」のバーを表示)。
+  - `analysis.tsx` — 分析。画面内セグメントで「収支」(円グラフ+一覧。**円グラフのタップで支出⇄収入を切替**)と「予算比」(総額の予算比・収入比のカード+カテゴリ別予算比のバー一覧)を切り替える。ホームの円グラフからもここへ遷移する。
 - `app/account.tsx` — 口座の追加/編集フォーム(`id` パラメータ有無で分岐)。削除もここから。ヘッダーはルートStackのデフォルト(`Stack.Screen options={{ title }}` でタイトル設定)。
-- 収支追加ボタン(FAB)は `components/add-transaction-fab.tsx` に共通化し、全タブ画面に配置。`useBottomTabBarHeight()` でタブバーの高さ分だけ上げて重なりを防ぐ(タブ内の一覧は `paddingBottom: tabBarHeight + 88` でFABと重ならないようにする)。
+- 設定 — 専用画面ではなく**サイドドロワー**(`components/settings-drawer.tsx`。Modal+Animatedの左スライドで自前実装、`@react-navigation/drawer` は未導入)。各タブのヘッダー左の☰ボタン(`components/settings-button.tsx`)で開く。中身は**項目別の折りたたみセクション**(ホームの表示/カテゴリ別予算/定期収支/支払日の警告。初期状態は「ホームの表示」のみ展開)。ホーム「使ったお金」の表示方式(カテゴリ別/期間別)・支出の比較対象(前月比/予算比/収入比。収入比は期間別のみ)・**カテゴリ別予算**(支出カテゴリごとの月予算。総額予算は合計から導出=`totalBudget()`)を変更する。設定値は `contexts/settings.tsx`(Context)経由で `settings` テーブル(key-value、予算は `categoryBudget.<key>` 行)に即時永続化。**定期収支(給料日・家賃等)の追加/削除**もここで行う(`recurrings` テーブルを直接CRUD。typeは `'expense'`/`'income'` のコード値。カテゴリは種別に応じた候補から2段階モーダル(大→サブ)で、口座もモーダルで選択=いずれもドロワーModal内の**入れ子Modal**。追加時は `appliedThrough`=今日で登録し当日以前の分は記帳しない)。支払日警告の日数(`alertDaysBefore`)もここで設定する。今後の設定項目もこのドロワーに追加する。**ドロワーの開閉ではタブ画面のフォーカスが失われない**ため、定期収支の変更を反映すべきホーム/履歴は `SettingsButton` の `onClosed` コールバックで再読込する(`drawerGen` を `useFocusEffect` の依存に入れる)。
+- `app/account-detail.tsx` — 口座詳細。画面内セグメントで「履歴」(その口座の取引のみのタイムライン)と「推移」(残高の折れ線グラフ+対象区間の増減リスト。区間は1ヶ月/半年/1年/全期間)を切り替える。ヘッダー右の「編集」から `/account?id=` へ。推移の計算は `lib/balance-history.ts`(区間開始前の取引を基準残高へ畳み込み、日ごとの終値を系列にする)。
+- 画面内セグメント(履歴のタイムライン/カレンダー、分析の収支/予算比、口座詳細の履歴/推移)は、ボタンタップに加えて**指に追従する左右スワイプ**でも切替できる。実装は `components/paged-tabs.tsx`(`ScrollView` の `pagingEnabled`。react-native-pager-view は未導入)で、`index`/`onIndexChange` でセグメント状態と同期する。各ページの縦FlatListとは軸が違うため共存する。
+- 収支追加ボタン(FAB)は `components/add-transaction-fab.tsx` に共通化し、全タブ画面に配置。**タブバーは標準配置(画面に被さらない)なので画面下端=タブバー上端**であり、FABの `bottom` は固定16(タブバー高さを足すと1本分浮いて見える。過去にそれが原因で「位置が高すぎる」となった)。タブ内の一覧は `paddingBottom: tabBarHeight + 88` でFABと重ならないようにする。縦スクロール中は下へスライドアウトし、スワイプ終了(慣性含む)で戻る(`hooks/use-auto-hide-fab.ts` の `scrollHandlers` を各画面の縦ScrollView/FlatListへ渡し、`hidden` をFABへ渡す)。
+- 設定ドロワーの開閉ボタン(☰)は `components/settings-button.tsx` に共通化し、**4タブ全てのヘッダー左**(タイトルの左)に配置する。
+- 各タブ画面のヘッダー(タイトル・セグメント・☰・残高の目アイコン・履歴の検索アイコン)は**スクロール領域の外**に置き、縦スクロールで画面外に出ないようにする。
 - **`<Link asChild>` の子要素の `style` は必ず単一オブジェクトで渡す(配列不可)。** expo-routerのSlotが `@radix-ui/react-slot` 経由で `style` を **オブジェクト展開** でマージするため、子が配列 `style={[a, b]}` だと `{0:a, 1:b}` に化けてスタイルが全消失する(FABの背景・位置が消える不具合の原因だった)。動的な値と合成したい場合は `style={StyleSheet.flatten([a, b])}` で1オブジェクトにする。
-- 取引登録ウィザードの**実際の遷移**(コードが正):
+- 取引登録/編集ウィザードの**実際の遷移**(コードが正)。3画面ともルートStackのデフォルトヘッダーを `_layout.tsx` で非表示にし、画面内ヘッダー(✕/←+画面名)を使う:
   1. `app/input.tsx` — 金額入力+種別(支出/収入/振替)選択 → 「次へ」で `/detail` へ push
-  2. `app/detail.tsx` — 日付・店舗・メモ入力、カテゴリ行タップで `/category` へ push、口座選択(振替は出金元/入金先の2行)は**画面内モーダル**(パラメータのバケツリレーを増やさないため遷移させない)、保存(Drizzleでinsertし `(tabs)` へ)
-  3. `app/category.tsx` — カテゴリ/サブカテゴリ選択(`constants/categories.ts` の静的データ駆動)後、`router.replace` で `/detail` へ
-- 画面間の値の受け渡しは push/replace のパラメータ(`type`/`amount`/`categoryKey`/`subcategoryKey`)。**項目を増やす場合はパラメータのバケツリレーを拡張せず、ウィザード下書き状態をContext等に集約するリファクタリングを先に行うこと**(「既知の課題」参照)。
+  2. `app/detail.tsx` — 日付・店舗・タグ(カンマ/読点区切りで入力し、保存時にカンマ区切りへ正規化)・メモ入力、金額タップで**電卓シート**(`components/calculator-sheet.tsx`+`lib/calculator.ts` の純粋ロジック。÷は四捨五入で整数円)、カテゴリ行タップで `/category` へ push、口座選択(振替は出金元/入金先の2行)は**画面内モーダル**、保存(新規はinsertして `(tabs)` へ replace、編集はupdateして `router.dismiss(2)` で元の画面へ)。編集時は「この記録を削除」ボタンも表示。
+  3. `app/category.tsx` — カテゴリ/サブカテゴリ選択(`constants/categories.ts` の静的データ駆動)後、下書きへ書き込んで `router.back()` で `/detail` へ戻る(replaceにすると detail が新インスタンスになり入力が消える)
+- ウィザードの状態は `contexts/transaction-draft.tsx` の `TransactionDraft`(Context)に一元化されており、**画面間でパラメータを渡さない**。新規は FAB の `startNew()`、編集はタイムラインのカードタップ時の `startEdit(tx)` で下書きを初期化してから `/input` へ遷移する。
 
 ### データ層
 - `db/client.ts` — `expo-sqlite` を同期オープンし `drizzle()` でラップ。DBファイル名は `kakeibo.db`。
-- `db/schema.ts` — テーブルは2つ。`transactions`(`type`, `amount`(整数円), `categoryKey`, `subcategoryKey`, `accountId`, `toAccountId`, `store`, `memo`, `date`)と `accounts`(`name`, `balance`(整数円、負値=負債も可、default 0))。型は `$inferSelect` / `$inferInsert` から導出する(手書きの型定義を作らない)。
+- `db/schema.ts` — テーブルは3つ。`transactions`(`type`, `amount`(整数円), `categoryKey`, `subcategoryKey`, `accountId`, `toAccountId`, `store`, `memo`, `tags`(ユーザー任意タグのカンマ区切り、null=なし), `date`)、`accounts`(`name`, `balance`(整数円、負値=負債も可、default 0))、`settings`(key-value。値は文字列で保存し、型付け・既定値は `contexts/settings.tsx` が担う)、`recurrings`(定期支出/収入。`type`(`'expense'`/`'income'` コード値)、`label`、`dayOfMonth`(1〜31、存在しない日は月末扱い)、`amount`(任意。null=自動記帳しない)、`categoryKey`/`subcategoryKey`、`accountId`(ソフト参照)、`appliedThrough`(この日までの発生分は記帳済み))の4つ。型は `$inferSelect` / `$inferInsert` から導出する(手書きの型定義を作らない)。
 - **口座残高は導出モデル。** `accounts.balance` は「基準残高」で、**現在残高 = 基準残高 + 取引差分**(`lib/balance.ts` の純粋関数で計算。支出-/収入+/振替は出金元-・入金先+)。口座編集画面は現在残高を入力させ、保存時に基準残高へ逆算する。`transactions.accountId`(振替は出金元)/`toAccountId`(振替の入金先)は**FK制約なしのソフト参照**で、null=口座未指定(残高に影響しない)。口座を削除しても取引は残る(参照は表示・集計側で無視)。
 - カテゴリマスタのテーブルは存在しない。カテゴリの定義とラベル解決は `constants/categories.ts`(`getCategory` / `getCategoryLabel` / `formatCategoryLabel`)。
 - `lib/summary.ts` — 月次集計の純粋関数(`getMonthRange` / `summarizeTransactions` / `summarizeByCategory`)。`振替` は収入・支出に計上しない。ホーム画面が `useFocusEffect` で参照。
@@ -68,7 +73,7 @@ npm run check            # lint+型チェック一括(コミット前に実行)
 ### UI/テーマ
 - `ThemedText`/`ThemedView`(`components/`)と `constants/theme.ts` でライト/ダーク配色を管理。`hooks/use-color-scheme` はネイティブ/Web用に分岐実装(`.ts`/`.web.ts`)。
 - アイコンは `components/ui/icon-symbol.tsx`(iOSはSF Symbols経由の `.ios.tsx` 実装、Android/WebはMaterialIconsへのマッピング)。**新しいアイコン名を使う場合はAndroid/Web用の `MAPPING` にも追記しないと表示されない。**
-- グラフは `react-native-svg` + 自前描画。扇形の計算は `lib/pie.ts`(純粋関数)、描画は `components/pie-chart.tsx`。カテゴリ色は `constants/theme.ts` の `CategoryColors`(**データの大小で色を並べ替えず、カテゴリキーに固定で紐づける**)。色系統はユーザー指定(食費=黄緑…車=朱、その他=灰)で、系統内の明度は色覚多様性の分離を最大化する値を採用済み。**ΔE12未達のペアが残るため、色だけで識別させない**(絵文字アイコン・ラベルを必ず併記する)。
+- グラフは `react-native-svg` + 自前描画。扇形の計算は `lib/pie.ts`(純粋関数)、描画は `components/pie-chart.tsx`(スライス内にカテゴリ名+割合の小ラベルを表示。弧長・リング幅に収まらないスライスでは非表示。文字色はスライス明度で近黒/近白を自動選択。中央の金額は穴の幅に合わせて自動縮小)。折れ線(残高推移)も同じ構成で、座標計算は `lib/line.ts`、描画は `components/line-chart.tsx`(単一系列・`accent` 色。値はグリッドラベルと下の増減リストで冗長化)。カテゴリ色は `constants/theme.ts` の `CategoryColors`(**データの大小で色を並べ替えず、カテゴリキーに固定で紐づける**)。色系統はユーザー指定(食費=黄緑…車=朱、その他=灰)で、系統内の明度は色覚多様性の分離を最大化する値を採用済み。**ΔE12未達のペアが残るため、色だけで識別させない**(絵文字アイコン・ラベルを必ず併記する)。
 
 ## コーディング規約(このプロジェクト固有)
 
@@ -85,14 +90,23 @@ npm run check            # lint+型チェック一括(コミット前に実行)
 変更時はこのリストを最新化すること(直したら消す)。
 
 ### バグ(優先度高)
-- **カテゴリ選択で入力内容が消える:** detail → category → `router.replace('/detail')` の遷移でdetailが新インスタンスになり、店舗・メモ・日付が失われる。スタックも `input → detail(旧) → detail(新)` と二重化する。修正はウィザード状態のContext化とセット。
-- **金額0円で保存できる:** `app/detail.tsx` のバリデーションが `NaN` チェックのみ。
-- **input/category/detail にデフォルトヘッダーが付く:** ルートStackで `options` 未指定のため、各画面の自前ヘッダーと二重になる。
+- **金額0円で保存できる:** `app/detail.tsx` のバリデーションが整数チェックのみ(`input.tsx` 側にも下限ガードなし)。
+- **定期収支の自動記帳が非トランザクション → 重複記帳リスク:** `lib/apply-recurrings.ts` は1ルールの複数発生分を `insert` ループで書いた**後に** `appliedThrough` を1回更新する。ループ途中でinsertが失敗/中断すると `appliedThrough` が進まず、次回実行で成功済みの分を再insertして重複する。同一ルールのinsert群+`appliedThrough`更新を `db.transaction` で束ねること。
 
 ### 未実装
 - `app/detail.tsx` の日付選択はAndroid専用(`DateTimePickerAndroid` 直呼び)。iOS未対応。
+- 履歴の検索モーダルの開始日/終了日ピッカーはWeb未対応(タップしても何も起きない。Androidは `DateTimePickerAndroid`、iOSはインラインピッカーで対応済み。Webは期間プリセットのみ使える)。
+- 設定ドロワー内のカテゴリ/口座選択はModalの入れ子(Modal内Modal)。Androidでは動くが**iOSの多重Modalは未検証**。
 - `app/input.tsx` の「カテゴリ選択」ボタンに `onPress` が未設定。
-- 取引の編集・削除機能なし。
+- 定期収支の自動記帳はホームのフォーカス時のみ実行される(ホームを開かずに他タブだけ見た場合は記帳されない)。
+- 定期収支の編集機能なし(削除→再追加で代用)。
+
+### UI負債
+- **ダークモードで壊れる色のハードコード:** 規約「色をハードコードしない」の違反がウィザード3画面に集中。`app/input.tsx` は**ほぼ全面**(キーパッド枠 `#eee`、種別ボタン背景 `#eee`/文字 `#888`、削除ボタン `#444` 等)、`app/detail.tsx`(行区切り `#ddd`、`currencyLabel #888`、保存ボタン `#4CAF50`)、`app/category.tsx`(行区切り `#ddd`、サブラベル `#888`)、`app/account.tsx:206`(`deleteText: '#E5484D'` は `Colors.critical` があるのに直書き)。触ったファイルから `constants/theme.ts` 参照へ直す。
+- **セーフエリア未対応(`paddingTop: 60` 固定):** `app/input.tsx` / `app/detail.tsx` / `app/category.tsx` のウィザード3画面が固定値のまま。`useSafeAreaInsets` へ移行する。
+
+### 掃除
+- テンプレート残骸 `app/modal.tsx` が `app/_layout.tsx` の `<Stack.Screen name="modal" …>`(40行目付近)でまだ登録されている。ルート自体は未使用なので、ファイルと該当行をまとめて削除できる。
 
 ### 技術的負債(スキーマ)
-- `type` が日本語リテラル(`'支出'`/`'収入'`/`'振替'`)のままDBに保存されている。コード値(`'expense'` 等)への移行が残っている(集計ロジック `lib/summary.ts` と `app/(tabs)/analysis.tsx` も `'支出'`/`'収入'` リテラルに依存)。
+- `type` が日本語リテラル(`'支出'`/`'収入'`/`'振替'`)のままDBに保存されている。コード値(`'expense'` 等)への移行が残っている。**依存範囲はリスト初出時より広く**、`lib/summary.ts`・`app/(tabs)/analysis.tsx` に加え、`lib/balance.ts`・`lib/apply-recurrings.ts`・`lib/calendar.ts`・`lib/transaction-filter.ts`・`components/transaction-timeline.tsx` も `'支出'`/`'収入'`/`'振替'` リテラルに依存する(移行時は一括で対応が必要)。
